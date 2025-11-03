@@ -12,78 +12,15 @@ interface User {
   email: string
 }
 
-const mockArticles = [
-  {
-    id: "1",
-    title: "Comment Larry Jackson a signé Mariah Carey à sa startup de 400 millions",
-    summary:
-      "Une histoire fascinante sur le monde des affaires modernes et les investissements stratégiques qui transforment l'industrie.",
-    source: "Forbes",
-    date: "Jun 6 2025",
-    category: "Affaires",
-    image: "/business-deal.jpg",
-    author: "Jane Reporter",
-    readTime: "8 min",
-  },
-  {
-    id: "2",
-    title: "Under Armour s'associe avec gamma pour une nouvelle campagne Stephen Curry",
-    summary:
-      "Le géant du sport annonce un partenariat majeur avec une nouvelle marque émergente pour révolutionner le marché.",
-    source: "Forbes",
-    date: "Apr 13 2025",
-    category: "Sports",
-    image: "/sports-brand.jpg",
-    author: "Mike Johnson",
-    readTime: "6 min",
-  },
-  {
-    id: "3",
-    title: "Pourquoi les femmes de gamma sont la clé de son succès multi-milliardaire",
-    summary: "Une analyse approfondie du rôle crucial des femmes dans les entreprises technologiques modernes.",
-    source: "Entrepreneur",
-    date: "Mar 26 2025",
-    category: "Technologie",
-    image: "/tech-leadership.jpg",
-    author: "Sarah Williams",
-    readTime: "10 min",
-  },
-  {
-    id: "4",
-    title: "Snoop Dogg, Sexyy Red apportent 420 millions de revenus",
-    summary:
-      "Les produits collaboratifs du célèbre rappeur génèrent des revenus record dans l'industrie du divertissement.",
-    source: "Hollywood Reporter",
-    date: "Jan 31 2025",
-    category: "Divertissement",
-    image: "/entertainment-industry.jpg",
-    author: "David Brown",
-    readTime: "7 min",
-  },
-  {
-    id: "5",
-    title: "Les tendances émergentes du marché technologique en 2025",
-    summary:
-      "Analyse des technologies qui façonneront l'année à venir dans le secteur tech avec prédictions d'experts.",
-    source: "TechCrunch",
-    date: "Jan 28 2025",
-    category: "Technologie",
-    image: "/tech-trends-2025.jpg",
-    author: "Alex Chen",
-    readTime: "9 min",
-  },
-  {
-    id: "6",
-    title: "Révolution dans le secteur des ressources renouvelables",
-    summary: "Les nouvelles technologies d'énergie verte changent le paysage énergétique mondial de manière durable.",
-    source: "Reuters",
-    date: "Jan 25 2025",
-    category: "Environnement",
-    image: "/renewable-energy.jpg",
-    author: "Emma Davis",
-    readTime: "11 min",
-  },
-]
+interface NewsArticle {
+  id: string
+  title: string
+  description: string
+  source: string
+  publishedAt: string
+  image?: string
+  url: string
+}
 
 const mockVideos = [
   {
@@ -126,6 +63,9 @@ export default function Dashboard() {
   const [showChat, setShowChat] = useState(false)
   const [mounted, setMounted] = useState(false)
   const [selectedCategory, setSelectedCategory] = useState("Tous")
+  const [articles, setArticles] = useState<NewsArticle[]>([])
+  const [loadingNews, setLoadingNews] = useState(false)
+  const [newsError, setNewsError] = useState<string | null>(null)
 
   useEffect(() => {
     setMounted(true)
@@ -137,14 +77,39 @@ export default function Dashboard() {
     setUser(JSON.parse(storedUser))
   }, [router])
 
+  useEffect(() => {
+    const fetchNews = async () => {
+      try {
+        setLoadingNews(true)
+        setNewsError(null)
+        const res = await fetch(`/api/news?q=technology%20OR%20world%20OR%20business&pageSize=10`, { cache: "no-store" })
+        const data = await res.json()
+        if (!res.ok) throw new Error(data?.error || "Failed to load news")
+        const mapped: NewsArticle[] = (data.articles || []).map((a: any, idx: number) => ({
+          id: String(idx + 1),
+          title: a.title || "Untitled",
+          description: a.description || a.content || "",
+          source: a.source?.name || "",
+          publishedAt: a.publishedAt || "",
+          image: a.urlToImage || "/placeholder.jpg",
+          url: a.url,
+        }))
+        setArticles(mapped)
+      } catch (e: any) {
+        setNewsError(e?.message || "Failed to load news")
+      } finally {
+        setLoadingNews(false)
+      }
+    }
+    fetchNews()
+  }, [])
   const handleLogout = () => {
     localStorage.removeItem("user")
     router.push("/")
   }
 
-  const categories = ["Tous", "Affaires", "Technologie", "Sports", "Divertissement", "Environnement"]
-  const filteredArticles =
-    selectedCategory === "Tous" ? mockArticles : mockArticles.filter((a) => a.category === selectedCategory)
+  const categories = ["Tous", "Technologie", "Monde", "Affaires"]
+  const filteredArticles = selectedCategory === "Tous" ? articles : articles
 
   if (!mounted || !user) {
     return null
@@ -185,8 +150,10 @@ export default function Dashboard() {
       <div className="max-w-6xl mx-auto px-6 py-12">
         {/* Title Section */}
         <div className="mb-12 fade-in-up">
-          <h1 className="text-5xl font-bold text-foreground mb-3">Articles du jour</h1>
-          <p className="text-lg text-muted-foreground">{filteredArticles.length} articles sélectionnés et vérifiés</p>
+          <h1 className="text-5xl font-bold text-foreground mb-3">Articles récents</h1>
+          <p className="text-lg text-muted-foreground">
+            {loadingNews ? "Chargement..." : newsError ? newsError : `${filteredArticles.length} articles`}
+          </p>
         </div>
 
         {/* Category Filter */}
@@ -208,60 +175,69 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {/* Magazine-style Articles List */}
+        {/* Articles List from NewsAPI */}
         <div className="space-y-8">
-          {filteredArticles.map((article, idx) => (
-            <Link
-              key={article.id}
-              href={`/article/${article.id}`}
-              className="fade-in-up group"
-              style={{ animationDelay: `${0.05 * idx}s` }}
-            >
-              <article className="border border-border rounded-xl overflow-hidden hover:border-accent transition-all duration-300 hover:shadow-lg bg-card/30">
-                <div className="grid md:grid-cols-3 gap-0">
-                  {/* Image */}
-                  <div className="md:col-span-1 h-64 md:h-auto overflow-hidden">
-                    <img
-                      src={article.image || "/placeholder.svg"}
-                      alt={article.title}
-                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                    />
-                  </div>
+          {!loadingNews && !newsError && filteredArticles.map((article, idx) => {
+            const href = `/article/${article.id}?` + new URLSearchParams({
+              url: article.url,
+              title: article.title,
+              source: article.source,
+              publishedAt: article.publishedAt,
+              image: article.image || "/article-featured-image.jpg",
+            }).toString()
 
-                  {/* Content */}
-                  <div className="md:col-span-2 p-8 flex flex-col justify-between">
-                    {/* Top Section */}
-                    <div>
-                      <div className="flex items-center gap-3 mb-4">
-                        <span className="inline-block px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold">
-                          {article.category}
-                        </span>
-                        <span className="text-xs text-muted-foreground">{article.source}</span>
-                      </div>
-
-                      <h2 className="text-2xl font-bold text-foreground mb-3 group-hover:text-primary transition-colors line-clamp-3">
-                        {article.title}
-                      </h2>
-
-                      <p className="text-foreground text-base leading-relaxed mb-4 line-clamp-2">{article.summary}</p>
+            return (
+              <Link
+                key={article.id}
+                href={href}
+                className="fade-in-up group"
+                style={{ animationDelay: `${0.05 * idx}s` }}
+              >
+                <article className="border border-border rounded-xl overflow-hidden hover:border-accent transition-all duration-300 hover:shadow-lg bg-card/30">
+                  <div className="grid md:grid-cols-3 gap-0">
+                    {/* Image */}
+                    <div className="md:col-span-1 h-64 md:h-auto overflow-hidden">
+                      <img
+                        src={article.image || "/placeholder.svg"}
+                        alt={article.title}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                      />
                     </div>
 
-                    {/* Bottom Section */}
-                    <div className="flex items-center justify-between pt-4 border-t border-border/50">
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <span>Par {article.author}</span>
-                        </span>
-                        <span>{article.readTime}</span>
-                        <span>{article.date}</span>
+                    {/* Content */}
+                    <div className="md:col-span-2 p-8 flex flex-col justify-between">
+                      {/* Top Section */}
+                      <div>
+                        <div className="flex items-center gap-3 mb-4">
+                          <span className="inline-block px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold">
+                            {article.source}
+                          </span>
+                          <span className="text-xs text-muted-foreground">{new Date(article.publishedAt).toDateString()}</span>
+                        </div>
+
+                        <h2 className="text-2xl font-bold text-foreground mb-3 group-hover:text-primary transition-colors line-clamp-3">
+                          {article.title}
+                        </h2>
+
+                        <p className="text-foreground text-base leading-relaxed mb-4 line-clamp-2">{article.description}</p>
                       </div>
-                      <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+
+                      {/* Bottom Section */}
+                      <div className="flex items-center justify-between pt-4 border-t border-border/50">
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <span>{article.source}</span>
+                          </span>
+                          <span>{new Date(article.publishedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                      </div>
                     </div>
                   </div>
-                </div>
-              </article>
-            </Link>
-          ))}
+                </article>
+              </Link>
+            )
+          })}
         </div>
       </div>
 

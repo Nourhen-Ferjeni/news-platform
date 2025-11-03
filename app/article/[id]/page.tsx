@@ -1,79 +1,104 @@
 "use client"
 import { Badge } from "@/components/ui/badge"
 import { Card } from "@/components/ui/card"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams, useParams } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, Clock, Eye, Share2, Bookmark, ThumbsUp, MessageCircle } from "lucide-react"
 import SourceVerification from "@/components/source-verification"
-import { useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 
-interface ArticleDetailPageProps {
-  params: {
-    id: string
-  }
-}
-
-export default function ArticleDetailPage({ params }: ArticleDetailPageProps) {
+export default function ArticleDetailPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const { id } = useParams<{ id: string }>()
   const [savedArticle, setSavedArticle] = useState(false)
   const [likes, setLikes] = useState(1204)
+  const [extracting, setExtracting] = useState(false)
+  const [summarizing, setSummarizing] = useState(false)
+  const [extractedText, setExtractedText] = useState<string | null>(null)
+  const [summary, setSummary] = useState<string | null>(null)
+  const [summaryError, setSummaryError] = useState<string | null>(null)
+
+  const articleFromQuery = useMemo(() => {
+    const title = searchParams.get("title") || ""
+    const source = searchParams.get("source") || ""
+    const date = searchParams.get("publishedAt") || ""
+    const image = searchParams.get("image") || "/article-featured-image.jpg"
+    const url = searchParams.get("url") || ""
+    return { title, source, date, image, url }
+  }, [searchParams])
 
   const article = {
-    id: params.id,
-    title: "Comment Larry Jackson a signé Mariah Carey à sa startup de 400 millions",
-    source: "Forbes",
-    date: "Jun 6 2025",
-    category: "Affaires",
-    author: "Jane Reporter",
-    authorAvatar: "JR",
-    readTime: "8",
-    views: "24.5K",
-    content: `
-      Une histoire fascinante sur le monde des affaires modernes et les investissements stratégiques.
-      
-      Larry Jackson, entrepreneur visionnaire et cofondateur de talents remarquables, a annoncé aujourd'hui 
-      la signature de Mariah Carey à sa nouvelle plateforme d'excellence créative, valorisée à 400 millions de dollars.
-      
-      Cette collaboration stratégique représente un tournant majeur dans l'industrie de l'entertainment. 
-      Mariah Carey, artiste légendaire avec un catalogue impressionnant, rejoint une écosystème 
-      innovant dédié à l'émergence des talents et à la création de contenu de classe mondiale.
-      
-      "C'est une opportunité exceptionnelle d'explorer de nouvelles frontières créatives," déclare 
-      Jackson lors de la conférence de presse. "Mariah apporte sa vision unique et son expérience 
-      inestimable à notre mission."
-      
-      La plateforme, lancée il y a moins d'un an, a déjà attiré plusieurs investisseurs majeurs 
-      et continue à redéfinir les standards de l'industrie créative.
-      
-      Les analystes de marché considèrent cette fusion comme un signal fort de confiance dans 
-      le modèle économique innovant proposé par Jackson et son équipe.
-    `,
-    summary: "Un partenariat majeur entre un entrepreneur visionnaire et une légende de la musique",
-    deepAnalysis: `
-      ANALYSE APPROFONDIE:
-      
-      1. Contexte Économique
-      - Valorisation de 400M$ indique une confiance forte du marché
-      - Stratégie d'acquisition de talents superstars
-      - Modèle basé sur la plateforme créative
-      
-      2. Implications pour l'Industrie
-      - Disruption potentielle des structures traditionnelles
-      - Nouvelle dynamique de pouvoir entre créateurs et plateformes
-      - Possibilités de monétisation alternatives
-      
-      3. Évaluation des Risques
-      - Viabilité à long terme du modèle
-      - Concurrence des plateformes établies
-      - Dépendance à la personnalité des talents
-      
-      4. Perspectives d'Avenir
-      - Expansion probable à d'autres domaines créatifs
-      - Potentiel IPO pour la plateforme
-      - Influence sur les contrats de talents
-    `,
+    id: id,
+    title: articleFromQuery.title || "Article",
+    source: articleFromQuery.source || "",
+    date: articleFromQuery.date || "",
+    category: "News",
+    author: articleFromQuery.source || "Reporter",
+    authorAvatar: (articleFromQuery.source || "R").slice(0, 2).toUpperCase(),
+    readTime: "",
+    views: "",
+    content: extractedText || "",
+    summary: summary || "",
   }
 
+  const handleExtractAndSummarize = useCallback(async () => {
+    if (!articleFromQuery.url) return
+    let extracted: string | null = null
+    try {
+      setExtracting(true)
+      setSummary(null)
+      // 1) extract
+      const ex = await fetch("/api/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: articleFromQuery.url }),
+      })
+      const exJson = await ex.json()
+      if (!ex.ok) throw new Error(exJson?.error || "Failed to extract")
+      extracted = (exJson.text as string) || ""
+      setExtractedText(extracted)
+    } catch (e) {
+      console.error(e)
+    } finally {
+      setExtracting(false)
+    }
+
+    try {
+      const textToSummarize = (extracted || "").trim()
+      if (!textToSummarize) return
+      setSummarizing(true)
+      setSummaryError(null)
+      // 2) summarize
+      const abort = new AbortController()
+      const timer = setTimeout(() => abort.abort(), 35000)
+      const sm = await fetch("/api/summarize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: textToSummarize, max_length: 150, min_length: 50 }),
+        signal: abort.signal,
+      })
+      clearTimeout(timer)
+      const smText = await sm.text()
+      let smJson: any = {}
+      try {
+        smJson = smText ? JSON.parse(smText) : {}
+      } catch {
+        smJson = {}
+      }
+      // Accept fallback summaries too; if error, show it instead of throwing
+      if (!sm.ok && !smJson?.summary) {
+        setSummaryError(smJson?.error || "Failed to summarize")
+        return
+      }
+      setSummary(smJson.summary)
+    } catch (e) {
+      console.error(e)
+      setSummaryError((e as Error)?.message || "Failed to summarize")
+    } finally {
+      setSummarizing(false)
+    }
+  }, [articleFromQuery.url])
   return (
     <main className="min-h-screen bg-background">
       {/* Premium Navigation Header */}
@@ -142,18 +167,12 @@ export default function ArticleDetailPage({ params }: ArticleDetailPageProps) {
 
             {/* Article Stats */}
             <div className="flex flex-wrap gap-6">
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Clock size={18} />
-                <span>{article.date}</span>
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Clock size={18} />
-                <span>{article.readTime} min</span>
-              </div>
-              <div className="flex items-center gap-2 text-muted-foreground">
-                <Eye size={18} />
-                <span>{article.views} vues</span>
-              </div>
+              {article.date && (
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Clock size={18} />
+                  <span>{new Date(article.date).toDateString()}</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -161,36 +180,75 @@ export default function ArticleDetailPage({ params }: ArticleDetailPageProps) {
 
       {/* Hero Image Section */}
       <div className="w-full h-96 md:h-[500px] fade-in">
-        <img src="/article-featured-image.jpg" alt={article.title} className="w-full h-full object-cover" />
+        <img src={articleFromQuery.image || "/article-featured-image.jpg"} alt={article.title} className="w-full h-full object-cover" />
       </div>
 
       {/* Main Content Area */}
       <div className="bg-background">
         <div className="max-w-4xl mx-auto px-6 py-12">
-          <Card className="p-8 mb-12 border border-primary/10 bg-gradient-to-br from-primary/5 to-accent/5 rounded-xl">
-            <p className="text-xl text-foreground leading-relaxed font-medium italic">"{article.summary}"</p>
-          </Card>
+          <div className="mb-12 fade-in-up" style={{ animationDelay: "0.05s" }}>
+            <h2 className="text-3xl font-bold text-foreground mb-4">Summary</h2>
+            <Card className="p-6 border border-primary/10 bg-gradient-to-br from-primary/5 to-accent/5 rounded-xl">
+              {summarizing && (
+                <p className="text-base md:text-lg text-muted-foreground">Summarizing…</p>
+              )}
+              {!summarizing && summaryError && (
+                <p className="text-base md:text-lg text-destructive">{summaryError}</p>
+              )}
+              {!summarizing && !summaryError && summary && (
+                <p className="text-base md:text-lg text-foreground leading-relaxed whitespace-pre-wrap">{summary}</p>
+              )}
+              {!summarizing && !summaryError && !summary && (
+                <p className="text-base md:text-lg text-muted-foreground">No summary yet. Click "Extract & Summarize".</p>
+              )}
+            </Card>
+          </div>
 
-          {/* Main Article Content */}
-          <div className="prose-invert max-w-none mb-12 fade-in-up" style={{ animationDelay: "0.1s" }}>
-            {article.content.split("\n").map(
-              (paragraph, idx) =>
-                paragraph.trim() && (
-                  <p key={idx} className="text-lg text-foreground leading-relaxed mb-8 text-justify">
-                    {paragraph.trim()}
-                  </p>
-                ),
+          {/* Extraction & Summary Controls */}
+          <div className="mb-8 flex flex-wrap gap-3">
+            <button
+              onClick={handleExtractAndSummarize}
+              disabled={extracting || summarizing || !articleFromQuery.url}
+              className="px-4 py-2 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-all disabled:opacity-60"
+            >
+              {extracting ? "Extracting…" : summarizing ? "Summarizing…" : "🧠 Extract & Summarize"}
+            </button>
+            {articleFromQuery.url && (
+              <a
+                href={articleFromQuery.url}
+                target="_blank"
+                rel="noreferrer"
+                className="px-4 py-2 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-all"
+              >
+                Open Original
+              </a>
             )}
           </div>
 
+          {/* Main Article Content */}
+          {article.content && (
+            <div className="mb-12 fade-in-up" style={{ animationDelay: "0.1s" }}>
+              <h2 className="text-3xl font-bold text-foreground mb-4">Extracted Article</h2>
+              <div className="prose-invert max-w-none">
+                {article.content.split("\n").map(
+                  (paragraph, idx) =>
+                    paragraph.trim() && (
+                      <p key={idx} className="text-base md:text-lg text-foreground leading-relaxed mb-6 text-justify">
+                        {paragraph.trim()}
+                      </p>
+                    ),
+                )}
+              </div>
+            </div>
+          )}
           <Card
             className="p-0 mb-12 border-0 bg-transparent rounded-xl fade-in-up overflow-hidden"
             style={{ animationDelay: "0.2s" }}
           >
             {/* Premium Section Header */}
             <div className="px-8 pt-12 pb-8 border-b border-border/30">
-              <h2 className="text-4xl font-bold text-foreground mb-2">Analyse Approfondie</h2>
-              <p className="text-muted-foreground text-base">Décortication des enjeux et impacts stratégiques</p>
+              <h2 className="text-4xl font-bold text-foreground mb-2">Analysis</h2>
+              <p className="text-muted-foreground text-base">AI summary and insights</p>
             </div>
 
             {/* Analysis Content - Vertical stacked layout */}
@@ -203,28 +261,28 @@ export default function ArticleDetailPage({ params }: ArticleDetailPageProps) {
                   </div>
                   <div className="flex-1">
                     <h3 className="text-2xl font-semibold text-foreground mb-3 group-hover:text-primary transition-colors">
-                      Contexte Économique
+                      Context
                     </h3>
                     <p className="text-muted-foreground leading-relaxed mb-4">
-                      Comprendre la dynamique financière et la position de marché de cette transaction.
+                      High-level insights extracted from the article content.
                     </p>
                     <ul className="space-y-2.5">
                       <li className="flex items-start gap-3">
                         <span className="w-1.5 h-1.5 rounded-full bg-primary mt-2.5 flex-shrink-0"></span>
                         <span className="text-foreground text-sm leading-relaxed">
-                          Valorisation de 400M$ indique une confiance forte du marché
+                          Key point 1
                         </span>
                       </li>
                       <li className="flex items-start gap-3">
                         <span className="w-1.5 h-1.5 rounded-full bg-primary mt-2.5 flex-shrink-0"></span>
                         <span className="text-foreground text-sm leading-relaxed">
-                          Stratégie d'acquisition de talents superstars
+                          Key point 2
                         </span>
                       </li>
                       <li className="flex items-start gap-3">
                         <span className="w-1.5 h-1.5 rounded-full bg-primary mt-2.5 flex-shrink-0"></span>
                         <span className="text-foreground text-sm leading-relaxed">
-                          Modèle basé sur la plateforme créative innovante
+                          Key point 3
                         </span>
                       </li>
                     </ul>
@@ -240,28 +298,28 @@ export default function ArticleDetailPage({ params }: ArticleDetailPageProps) {
                   </div>
                   <div className="flex-1">
                     <h3 className="text-2xl font-semibold text-foreground mb-3 group-hover:text-accent transition-colors">
-                      Implications Stratégiques
+                      Implications
                     </h3>
                     <p className="text-muted-foreground leading-relaxed mb-4">
-                      Analyse des conséquences pour l'écosystème créatif et les structures traditionnelles.
+                      Potential impacts and stakeholders.
                     </p>
                     <ul className="space-y-2.5">
                       <li className="flex items-start gap-3">
                         <span className="w-1.5 h-1.5 rounded-full bg-accent mt-2.5 flex-shrink-0"></span>
                         <span className="text-foreground text-sm leading-relaxed">
-                          Disruption potentielle des structures traditionnelles
+                          Impact A
                         </span>
                       </li>
                       <li className="flex items-start gap-3">
                         <span className="w-1.5 h-1.5 rounded-full bg-accent mt-2.5 flex-shrink-0"></span>
                         <span className="text-foreground text-sm leading-relaxed">
-                          Nouvelle dynamique de pouvoir entre créateurs et plateformes
+                          Impact B
                         </span>
                       </li>
                       <li className="flex items-start gap-3">
                         <span className="w-1.5 h-1.5 rounded-full bg-accent mt-2.5 flex-shrink-0"></span>
                         <span className="text-foreground text-sm leading-relaxed">
-                          Possibilités de monétisation alternatives
+                          Impact C
                         </span>
                       </li>
                     </ul>
@@ -277,28 +335,28 @@ export default function ArticleDetailPage({ params }: ArticleDetailPageProps) {
                   </div>
                   <div className="flex-1">
                     <h3 className="text-2xl font-semibold text-foreground mb-3 group-hover:text-destructive transition-colors">
-                      Facteurs de Risque
+                      Risks
                     </h3>
                     <p className="text-muted-foreground leading-relaxed mb-4">
-                      Identification des défis et incertitudes associés à ce modèle.
+                      Challenges and uncertainties.
                     </p>
                     <ul className="space-y-2.5">
                       <li className="flex items-start gap-3">
                         <span className="w-1.5 h-1.5 rounded-full bg-destructive mt-2.5 flex-shrink-0"></span>
                         <span className="text-foreground text-sm leading-relaxed">
-                          Viabilité à long terme du modèle économique
+                          Risk 1
                         </span>
                       </li>
                       <li className="flex items-start gap-3">
                         <span className="w-1.5 h-1.5 rounded-full bg-destructive mt-2.5 flex-shrink-0"></span>
                         <span className="text-foreground text-sm leading-relaxed">
-                          Concurrence croissante des plateformes établies
+                          Risk 2
                         </span>
                       </li>
                       <li className="flex items-start gap-3">
                         <span className="w-1.5 h-1.5 rounded-full bg-destructive mt-2.5 flex-shrink-0"></span>
                         <span className="text-foreground text-sm leading-relaxed">
-                          Dépendance à la personnalité des talents clés
+                          Risk 3
                         </span>
                       </li>
                     </ul>
@@ -314,28 +372,28 @@ export default function ArticleDetailPage({ params }: ArticleDetailPageProps) {
                   </div>
                   <div className="flex-1">
                     <h3 className="text-2xl font-semibold text-foreground mb-3 group-hover:text-primary transition-colors">
-                      Perspectives d'Avenir
+                      Outlook
                     </h3>
                     <p className="text-muted-foreground leading-relaxed mb-4">
-                      Tendances attendues et évolution probable de cette stratégie.
+                      Likely developments.
                     </p>
                     <ul className="space-y-2.5">
                       <li className="flex items-start gap-3">
                         <span className="w-1.5 h-1.5 rounded-full bg-primary mt-2.5 flex-shrink-0"></span>
                         <span className="text-foreground text-sm leading-relaxed">
-                          Expansion probable à d'autres domaines créatifs
+                          Outlook 1
                         </span>
                       </li>
                       <li className="flex items-start gap-3">
                         <span className="w-1.5 h-1.5 rounded-full bg-primary mt-2.5 flex-shrink-0"></span>
                         <span className="text-foreground text-sm leading-relaxed">
-                          Potentiel IPO ou acquisition stratégique
+                          Outlook 2
                         </span>
                       </li>
                       <li className="flex items-start gap-3">
                         <span className="w-1.5 h-1.5 rounded-full bg-primary mt-2.5 flex-shrink-0"></span>
                         <span className="text-foreground text-sm leading-relaxed">
-                          Influence majeure sur les contrats de talents
+                          Outlook 3
                         </span>
                       </li>
                     </ul>
