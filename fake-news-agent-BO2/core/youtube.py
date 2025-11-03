@@ -91,13 +91,13 @@ CONFIG = {
     "USER_AGENT": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
     "RETRY_ATTEMPTS": 3,
     "RETRY_DELAY": 5,
-    "YOUTUBE_API_KEY": "AIzaSyDXMZnGvMfqBJu5dp4l33a5TXdLpn-rGAg",
+    "YOUTUBE_API_KEY": "key",
     "YOUTUBE_MAX_RESULTS": 20,
     "WHISPER_MODEL": "base",  # base, small, medium, large
     "MAX_AUDIO_DURATION": 600,  # 10 minutes maximum pour l'extraction audio
     "MAX_VIDEOS_TO_PROCESS": 1,  # SEULEMENT 2 VIDÉOS À TRAITER
     "MAX_CONTENT_LENGTH": 10000,  # Longueur maximale pour le résumé
-    "GEMINI_API_KEY": "AIzaSyB0kDVdaGNU9s2LF1odlqiQzFTl0ivJSWk"
+    "GEMINI_API_KEY": "key"
 }
 
 def summarize_text(text: str) -> str:
