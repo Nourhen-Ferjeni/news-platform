@@ -2,6 +2,7 @@
 venv/
 __pycache__/
 var/
+all_news/
 
 
 # Next.js
