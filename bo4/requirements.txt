@@ -1,0 +1,25 @@
+# This file contains the Python dependencies for the News Analysis Pipeline.
+# You can install them using: pip install -r requirements.txt
+
+# Core ML Libraries
+nltk
+sentence-transformers
+chromadb
+bitsandbytes
+ctransformers
+# Required for Gemma model
+accelerate
+xformers
+
+# External APIs
+wikipedia-api
+newsapi-python
+requests
+
+# LangGraph Orchestration
+langgraph
+langchain
+
+# For standalone testing APIs
+fastapi
+uvicorn[standard]
