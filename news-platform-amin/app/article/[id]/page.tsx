@@ -6,6 +6,7 @@ import Link from "next/link"
 import { ArrowLeft, Clock, Eye, Share2, Bookmark, ThumbsUp, MessageCircle } from "lucide-react"
 import SourceVerification from "@/components/source-verification"
 import { useCallback, useMemo, useState } from "react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 export default function ArticleDetailPage() {
   const router = useRouter()
@@ -18,6 +19,10 @@ export default function ArticleDetailPage() {
   const [extractedText, setExtractedText] = useState<string | null>(null)
   const [summary, setSummary] = useState<string | null>(null)
   const [summaryError, setSummaryError] = useState<string | null>(null)
+  const [generating, setGenerating] = useState(false)
+  const [showModal, setShowModal] = useState(false)
+  const [generatedPost, setGeneratedPost] = useState<any>(null)
+
 
   const articleFromQuery = useMemo(() => {
     const title = searchParams.get("title") || ""
@@ -99,6 +104,26 @@ export default function ArticleDetailPage() {
       setSummarizing(false)
     }
   }, [articleFromQuery.url])
+  const handleGeneratePost = async () => {
+  console.log("🟦 Generate button clicked"); // debug
+
+  const res = await fetch("http://127.0.0.1:8080/generate_post", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      article_text: extractedText || summary || "No text"
+    }),
+  });
+
+  console.log("🟦 API request sent");
+
+  const data = await res.json();
+  console.log("🟩 Response received:", data);
+
+  setGeneratedPost(data);
+  setShowModal(true);
+};
+
   return (
     <main className="min-h-screen bg-background">
       {/* Premium Navigation Header */}
@@ -212,6 +237,13 @@ export default function ArticleDetailPage() {
               className="px-4 py-2 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-all disabled:opacity-60"
             >
               {extracting ? "Extracting…" : summarizing ? "Summarizing…" : "🧠 Extract & Summarize"}
+            </button>
+            <button
+              onClick={handleGeneratePost}
+              disabled={generating || !summary}
+              className="px-4 py-2 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-all disabled:opacity-60"
+            >
+              {generating ? "Generating Post…" : "🚀 Generate Social Post"}
             </button>
             {articleFromQuery.url && (
               <a
@@ -458,6 +490,43 @@ export default function ArticleDetailPage() {
           </div>
         </div>
       </div>
+      <Dialog open={showModal} onOpenChange={setShowModal}>
+       <DialogContent className="w-full max-w-3xl">
+       <DialogHeader>
+        <DialogTitle>Generated Social Media Post</DialogTitle>
+       </DialogHeader>
+
+       {generatedPost && (
+       <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
+         <p><strong>Summary:</strong> {generatedPost.summary}</p>
+         <p><strong>Emojis:</strong> {generatedPost.emojis}</p>
+         <p><strong>Hashtags:</strong> {generatedPost.hashtags}</p>
+
+         {generatedPost.image_path && (
+           <img src={`http://127.0.0.1:8080/${generatedPost.image_path}`} 
+                alt="Generated" className="rounded-lg border" />
+        )}
+
+         <button
+            className="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded-lg"
+            onClick={async () => {
+             const shareRes = await fetch("http://127.0.0.1:8080/share_post", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(generatedPost),
+              });
+             const resp = await shareRes.json();
+             if (resp.facebook_post_id) alert("✅ Post shared successfully!");
+             else alert("❌ Failed to share post!");
+           }}
+          >
+           📤 Share on Facebook
+         </button>
+        </div>
+      )}
+    </DialogContent>
+    </Dialog>
+
     </main>
   )
 }
