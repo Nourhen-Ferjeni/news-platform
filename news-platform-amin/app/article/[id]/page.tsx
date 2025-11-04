@@ -7,6 +7,7 @@ import { ArrowLeft, Clock, Eye, Share2, Bookmark, ThumbsUp, MessageCircle } from
 import SourceVerification from "@/components/source-verification"
 import { useCallback, useMemo, useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { BrainCircuit } from "lucide-react"
 
 export default function ArticleDetailPage() {
   const router = useRouter()
@@ -22,6 +23,9 @@ export default function ArticleDetailPage() {
   const [generating, setGenerating] = useState(false)
   const [showModal, setShowModal] = useState(false)
   const [generatedPost, setGeneratedPost] = useState<any>(null)
+  const [analyzing, setAnalyzing] = useState(false)
+  const [analysis, setAnalysis] = useState<string | null>(null)
+  const [analysisError, setAnalysisError] = useState<string | null>(null)
 
 
   const articleFromQuery = useMemo(() => {
@@ -104,6 +108,28 @@ export default function ArticleDetailPage() {
       setSummarizing(false)
     }
   }, [articleFromQuery.url])
+
+  const handleAnalyze = useCallback(async () => {
+    if (!extractedText) return
+    try {
+      setAnalyzing(true)
+      setAnalysis(null)
+      setAnalysisError(null)
+      const res = await fetch("http://127.0.0.1:8001/analyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ article_text: extractedText }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || "Failed to analyze")
+      setAnalysis(data.analysis)
+    } catch (e) {
+      console.error(e)
+      setAnalysisError((e as Error)?.message || "Failed to analyze")
+    } finally {
+      setAnalyzing(false)
+    }
+  }, [extractedText])
   const handleGeneratePost = async () => {
   console.log("🟦 Generate button clicked"); // debug
 
@@ -239,6 +265,13 @@ export default function ArticleDetailPage() {
               {extracting ? "Extracting…" : summarizing ? "Summarizing…" : "🧠 Extract & Summarize"}
             </button>
             <button
+              onClick={handleAnalyze}
+              disabled={analyzing || !extractedText}
+              className="px-4 py-2 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-all disabled:opacity-60"
+            >
+              {analyzing ? "Analyzing…" : <><BrainCircuit size={16} className="mr-2" /> Analyze</>}
+            </button>
+            <button
               onClick={handleGeneratePost}
               disabled={generating || !summary}
               className="px-4 py-2 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-all disabled:opacity-60"
@@ -285,153 +318,26 @@ export default function ArticleDetailPage() {
 
             {/* Analysis Content - Vertical stacked layout */}
             <div className="divide-y divide-border/20">
-              {/* Analysis Item 1 */}
-              <div className="px-8 py-10 hover:bg-card/40 transition-colors duration-300 group cursor-pointer">
-                <div className="flex items-start gap-6 mb-4">
-                  <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-lg flex-shrink-0 group-hover:from-primary/30 group-hover:to-primary/20 transition-colors">
-                    01
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-2xl font-semibold text-foreground mb-3 group-hover:text-primary transition-colors">
-                      Context
-                    </h3>
-                    <p className="text-muted-foreground leading-relaxed mb-4">
-                      High-level insights extracted from the article content.
-                    </p>
-                    <ul className="space-y-2.5">
-                      <li className="flex items-start gap-3">
-                        <span className="w-1.5 h-1.5 rounded-full bg-primary mt-2.5 flex-shrink-0"></span>
-                        <span className="text-foreground text-sm leading-relaxed">
-                          Key point 1
-                        </span>
-                      </li>
-                      <li className="flex items-start gap-3">
-                        <span className="w-1.5 h-1.5 rounded-full bg-primary mt-2.5 flex-shrink-0"></span>
-                        <span className="text-foreground text-sm leading-relaxed">
-                          Key point 2
-                        </span>
-                      </li>
-                      <li className="flex items-start gap-3">
-                        <span className="w-1.5 h-1.5 rounded-full bg-primary mt-2.5 flex-shrink-0"></span>
-                        <span className="text-foreground text-sm leading-relaxed">
-                          Key point 3
-                        </span>
-                      </li>
-                    </ul>
-                  </div>
+              {analyzing && (
+                <div className="px-8 py-10">
+                  <p className="text-base md:text-lg text-muted-foreground">Analyzing…</p>
                 </div>
-              </div>
-
-              {/* Analysis Item 2 */}
-              <div className="px-8 py-10 hover:bg-card/40 transition-colors duration-300 group cursor-pointer">
-                <div className="flex items-start gap-6 mb-4">
-                  <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-accent/20 to-accent/10 border border-accent/20 flex items-center justify-center text-accent font-bold text-lg flex-shrink-0 group-hover:from-accent/30 group-hover:to-accent/20 transition-colors">
-                    02
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-2xl font-semibold text-foreground mb-3 group-hover:text-accent transition-colors">
-                      Implications
-                    </h3>
-                    <p className="text-muted-foreground leading-relaxed mb-4">
-                      Potential impacts and stakeholders.
-                    </p>
-                    <ul className="space-y-2.5">
-                      <li className="flex items-start gap-3">
-                        <span className="w-1.5 h-1.5 rounded-full bg-accent mt-2.5 flex-shrink-0"></span>
-                        <span className="text-foreground text-sm leading-relaxed">
-                          Impact A
-                        </span>
-                      </li>
-                      <li className="flex items-start gap-3">
-                        <span className="w-1.5 h-1.5 rounded-full bg-accent mt-2.5 flex-shrink-0"></span>
-                        <span className="text-foreground text-sm leading-relaxed">
-                          Impact B
-                        </span>
-                      </li>
-                      <li className="flex items-start gap-3">
-                        <span className="w-1.5 h-1.5 rounded-full bg-accent mt-2.5 flex-shrink-0"></span>
-                        <span className="text-foreground text-sm leading-relaxed">
-                          Impact C
-                        </span>
-                      </li>
-                    </ul>
-                  </div>
+              )}
+              {!analyzing && analysisError && (
+                <div className="px-8 py-10">
+                  <p className="text-base md:text-lg text-destructive">{analysisError}</p>
                 </div>
-              </div>
-
-              {/* Analysis Item 3 */}
-              <div className="px-8 py-10 hover:bg-card/40 transition-colors duration-300 group cursor-pointer">
-                <div className="flex items-start gap-6 mb-4">
-                  <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-destructive/20 to-destructive/10 border border-destructive/20 flex items-center justify-center text-destructive font-bold text-lg flex-shrink-0 group-hover:from-destructive/30 group-hover:to-destructive/20 transition-colors">
-                    03
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-2xl font-semibold text-foreground mb-3 group-hover:text-destructive transition-colors">
-                      Risks
-                    </h3>
-                    <p className="text-muted-foreground leading-relaxed mb-4">
-                      Challenges and uncertainties.
-                    </p>
-                    <ul className="space-y-2.5">
-                      <li className="flex items-start gap-3">
-                        <span className="w-1.5 h-1.5 rounded-full bg-destructive mt-2.5 flex-shrink-0"></span>
-                        <span className="text-foreground text-sm leading-relaxed">
-                          Risk 1
-                        </span>
-                      </li>
-                      <li className="flex items-start gap-3">
-                        <span className="w-1.5 h-1.5 rounded-full bg-destructive mt-2.5 flex-shrink-0"></span>
-                        <span className="text-foreground text-sm leading-relaxed">
-                          Risk 2
-                        </span>
-                      </li>
-                      <li className="flex items-start gap-3">
-                        <span className="w-1.5 h-1.5 rounded-full bg-destructive mt-2.5 flex-shrink-0"></span>
-                        <span className="text-foreground text-sm leading-relaxed">
-                          Risk 3
-                        </span>
-                      </li>
-                    </ul>
-                  </div>
+              )}
+              {!analyzing && !analysisError && analysis && (
+                <div className="px-8 py-10">
+                  <pre className="text-base md:text-lg text-foreground leading-relaxed whitespace-pre-wrap">{analysis}</pre>
                 </div>
-              </div>
-
-              {/* Analysis Item 4 */}
-              <div className="px-8 py-10 hover:bg-card/40 transition-colors duration-300 group cursor-pointer">
-                <div className="flex items-start gap-6 mb-4">
-                  <div className="w-12 h-12 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-lg flex-shrink-0 group-hover:from-primary/30 group-hover:to-primary/20 transition-colors">
-                    04
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-2xl font-semibold text-foreground mb-3 group-hover:text-primary transition-colors">
-                      Outlook
-                    </h3>
-                    <p className="text-muted-foreground leading-relaxed mb-4">
-                      Likely developments.
-                    </p>
-                    <ul className="space-y-2.5">
-                      <li className="flex items-start gap-3">
-                        <span className="w-1.5 h-1.5 rounded-full bg-primary mt-2.5 flex-shrink-0"></span>
-                        <span className="text-foreground text-sm leading-relaxed">
-                          Outlook 1
-                        </span>
-                      </li>
-                      <li className="flex items-start gap-3">
-                        <span className="w-1.5 h-1.5 rounded-full bg-primary mt-2.5 flex-shrink-0"></span>
-                        <span className="text-foreground text-sm leading-relaxed">
-                          Outlook 2
-                        </span>
-                      </li>
-                      <li className="flex items-start gap-3">
-                        <span className="w-1.5 h-1.5 rounded-full bg-primary mt-2.5 flex-shrink-0"></span>
-                        <span className="text-foreground text-sm leading-relaxed">
-                          Outlook 3
-                        </span>
-                      </li>
-                    </ul>
-                  </div>
+              )}
+              {!analyzing && !analysisError && !analysis && (
+                <div className="px-8 py-10">
+                  <p className="text-base md:text-lg text-muted-foreground">No analysis yet. Click "Analyze".</p>
                 </div>
-              </div>
+              )}
             </div>
 
             {/* Key Insight Section */}

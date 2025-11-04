@@ -6,7 +6,7 @@ export async function GET(request: Request) {
   const q = searchParams.get("q") || "technology OR world OR business";
   const pageSize = parseInt(searchParams.get("pageSize") || "10", 10);
 
-  const apiKey = process.env.NEWSAPI_KEY;
+  const apiKey = process.env.NEWSAPI_KEY || "8ac582cde6c241fdb71e5835fe4c201a";
   if (!apiKey) {
     return NextResponse.json(
       { error: "Missing NEWSAPI_KEY in environment." },
