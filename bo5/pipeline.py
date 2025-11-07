@@ -6,199 +6,268 @@ from keybert import KeyBERT
 from stable_diffusion_cpp import StableDiffusion
 from PIL import Image
 import re
+import os
+import traceback
+import time
+
+# ==============================================================
+# Configuration GPU optimisée pour MX150
+# ==============================================================
+MODEL_PATH = "models/stable-diffusion-v1-5-pruned-emaonly-Q4_0.gguf"
+WIDTH = 512
+HEIGHT = 512
+STEPS = 20  # Réduit pour MX150
+CFG_SCALE = 7.0
+
+print("=== GPU Configuration ===")
+print("🟦 Target GPU: NVIDIA GeForce MX150")
+print("🟦 Recommended settings for 2GB VRAM")
+
+# ==============================================================
+# 🔧 Load SD Model - Version corrigée
+# ==============================================================
+def load_sd_model():
+    try:
+        print("🟦 Loading Stable Diffusion model...")
+        
+        # Version simplifiée sans paramètre backend
+        sd_model = StableDiffusion(
+            model_path=MODEL_PATH,
+            n_threads=8,
+            # Le backend est automatiquement détecté
+            # vae_tiling=True,  # Supprimé si non supporté
+            # rng_type="CUDA"   # Supprimé si non supporté
+        )
+        
+        print("✅ Stable Diffusion model loaded successfully")
+        return sd_model
+        
+    except Exception as e:
+        print(f"❌ Error loading Stable Diffusion model: {e}")
+        print(traceback.format_exc())
+        raise
+
+# Charger le modèle
+sd_model = load_sd_model()
 
 # ==============================================================
 # 🧠 NLP Models
 # ==============================================================
-summarizer = hf_pipeline("summarization", model="facebook/bart-large-cnn")
-sentiment_model = hf_pipeline("sentiment-analysis")
-kw_model = KeyBERT()
+try:
+    summarizer = hf_pipeline("summarization", model="facebook/bart-large-cnn")
+    sentiment_model = hf_pipeline("sentiment-analysis")
+    kw_model = KeyBERT()
+    print("✅ NLP models loaded successfully")
+except Exception as e:
+    print(f"❌ Error loading NLP models: {e}")
+    raise
 
 # ==============================================================
 # 🧪 NLP Helper Functions
 # ==============================================================
 def smart_summarize(text):
-    return summarizer(text, max_length=60, min_length=25, do_sample=False)[0]["summary_text"]
+    try:
+        if len(text.strip()) < 50:
+            return text
+        return summarizer(text, max_length=60, min_length=25, do_sample=False)[0]["summary_text"]
+    except Exception as e:
+        print(f"❌ Error in summarization: {e}")
+        return text[:100] + "..." if len(text) > 100 else text
 
 def extract_keywords(text, k=5):
-    kws = kw_model.extract_keywords(text, keyphrase_ngram_range=(1,2), stop_words='english', top_n=k)
-    return [kw[0] for kw in kws]
+    try:
+        kws = kw_model.extract_keywords(text, keyphrase_ngram_range=(1,2), stop_words='english', top_n=k)
+        return [kw[0] for kw in kws]
+    except Exception as e:
+        print(f"❌ Error extracting keywords: {e}")
+        return ["news", "update", "information"]
 
 def sentiment_to_emojis(text):
-    text_lower = text.lower()
+    try:
+        text_lower = text.lower()
 
-    topic_emoji_map = {
-        # War / Conflict
-        "war": "⚔️🕊️🔥",
-        "battle": "⚔️🔥",
-        "military": "🪖🚁🔥",
-        "conflict": "⚠️🛑🕊️",
-        "attack": "🚨🔥",
-        "army": "🪖🇺🇳",
-        "soldier": "🪖🇺🇳",
-        "bomb": "💥🚨",
+        topic_emoji_map = {
+            "technology": "🤖💡", "ai": "🤖🧠", "artificial intelligence": "🤖🧠",
+            "war": "⚔️🕊️🔥", "conflict": "⚠️🛑🕊️", "economy": "📉📈💰",
+            "market": "💹📊", "climate": "🌍🔥", "sport": "🏅💪",
+            "health": "🏥🩺", "politics": "🏛️📜", "business": "📊💼",
+        }
 
-        # Economy / Finance
-        "economy": "📉📈💰",
-        "market": "💹📊",
-        "finance": "💵🏦",
-        "bank": "🏦💳",
-        "inflation": "📈⚠️",
-        "crypto": "🪙🚀",
-
-        # Technology / AI
-        "technology": "🤖💡",
-        "ai": "🤖🧠",
-        "artificial intelligence": "🤖🧠",
-        "robot": "🤖⚙️",
-        "hacking": "💻🕵️‍♂️",
-        "cyber": "🛡️💻",
-
-        # Environment
-        "climate": "🌍🔥",
-        "earthquake": "🌍⚠️",
-        "storm": "🌧️⚡",
-        "fire": "🔥🚒",
-        "flood": "🌊🚨",
-
-        # Health
-        "virus": "🦠🚑",
-        "covid": "🦠😷",
-        "disease": "🧬⚠️",
-        "hospital": "🏥🩺",
-
-        # Politics
-        "election": "🗳️🇺🇳",
-        "government": "🏛️📜",
-        "president": "🏛️🇺🇳",
-
-        # Sports
-        "football": "⚽🏆",
-        "sport": "🏅💪",
-
-        # Innovation / Business
-        "startup": "🚀💡",
-        "innovation": "💡🚀",
-        "business": "📊💼",
-    }
-
-    # Match topic keywords to emojis
-    for keyword, emojis in topic_emoji_map.items():
-        if keyword in text_lower:
-            return emojis
-    
-    # Fallback to sentiment if no topic found
-    sentiment = sentiment_model(text)[0]["label"]
-    if sentiment == "POSITIVE":
-        return "✨✅😊"
-    elif sentiment == "NEGATIVE":
-        return "⚠️😟🚨"
-    else:
-        return "🤔📌"
-
+        for keyword, emojis in topic_emoji_map.items():
+            if keyword in text_lower:
+                return emojis
+        
+        sentiment = sentiment_model(text[:512])[0]["label"]
+        if sentiment == "POSITIVE":
+            return "✨✅😊"
+        elif sentiment == "NEGATIVE":
+            return "⚠️😟🚨"
+        else:
+            return "🤔📌"
+    except Exception as e:
+        print(f"❌ Error in sentiment analysis: {e}")
+        return "📰✨"
 
 def keywords_to_hashtags(keywords):
-    hashtags = []
-    for kw in keywords:
-        kw = re.sub(r"[^a-zA-Z0-9]", "", kw)
-        if kw:
-            hashtags.append("#" + kw.capitalize())
-    return " ".join(hashtags)
-
-# ==============================================================
-# 🖼️ Stable Diffusion GGUF Config
-# ==============================================================
-MODEL_PATH = "models/stable-diffusion-v1-5-pruned-emaonly-Q4_0.gguf"
-WIDTH = 512
-HEIGHT = 512
-STEPS = 40
+    try:
+        hashtags = []
+        for kw in keywords:
+            kw = re.sub(r"[^a-zA-Z0-9]", "", kw)
+            if kw:
+                hashtags.append("#" + kw.capitalize())
+        return " ".join(hashtags[:5])
+    except Exception as e:
+        print(f"❌ Error creating hashtags: {e}")
+        return "#News #Update"
 
 def get_gguf_prompts(summary: str, emojis: str, hashtags: str):
-    subject = summary.split('.')[0].strip()
-    
-    positive_prompt = f"""
-realistic photograph of {subject},
-daylight, realistic colors, normal perspective, natural lighting,
-taken with a DSLR camera, photojournalism style, no text, no watermark
-{emojis} {hashtags}
+    try:
+        subject = summary.split('.')[0].strip()
+        
+        positive_prompt = f"""
+professional photojournalism, {subject},
+high quality, detailed, realistic, natural lighting,
+news photography style, current events
 """.strip()
 
-    negative_prompt = """
+        negative_prompt = """
 cartoon, anime, painting, CGI, digital art, low quality, blurry,
-distorted, overexposed, underexposed, exaggerated lighting,
-cinematic, dramatic, HDR, unrealistic
+distorted, overexposed, underexposed, text, watermark, signature
 """.strip()
 
-    return positive_prompt, negative_prompt
-
-
-# ==============================================================
-# 🔧 Load SD Model
-# ==============================================================
-def load_sd_model():
-    sd_model = StableDiffusion(model_path=MODEL_PATH)
-    return sd_model
-
-sd_model = load_sd_model()
+        return positive_prompt, negative_prompt
+    except Exception as e:
+        print(f"❌ Error creating prompts: {e}")
+        return "news photography, professional", "cartoon, anime, blurry"
 
 # ==============================================================
 # 🖼️ Image Generation Function
 # ==============================================================
-import os
-
 IMAGES_DIR = "generated" 
 
 def generate_image(prompt: str, negative_prompt: str, output_filename="generated_image.png"):
-    # Ensure folder exists
-    os.makedirs(IMAGES_DIR, exist_ok=True)
+    try:
+        os.makedirs(IMAGES_DIR, exist_ok=True)
+        full_path = os.path.join(IMAGES_DIR, output_filename)
 
-    full_path = os.path.join(IMAGES_DIR, output_filename)
+        print("🟦 Starting image generation...")
+        print(f"🟦 Prompt: {prompt[:100]}...")
+        
+        start_time = time.time()
 
-    image = sd_model.generate_image(
-        prompt=prompt,
-        negative_prompt=negative_prompt,
-        width=WIDTH,
-        height=HEIGHT,
-        sample_steps=STEPS,
-        cfg_scale=8
-    )
+        # Génération avec paramètres de base
+        image = sd_model.generate_image(
+            prompt=prompt,
+            negative_prompt=negative_prompt,
+            width=WIDTH,
+            height=HEIGHT,
+            sample_steps=STEPS,
+            cfg_scale=CFG_SCALE,
+            seed=-1  # Random seed
+        )
 
-    if isinstance(image, list):
-        image = image[0]
+        generation_time = time.time() - start_time
+        print(f"✅ Image generated in {generation_time:.2f} seconds")
 
-    image.save(full_path)
-    
-    # Return relative path for frontend URL
-    return f"{IMAGES_DIR}/{output_filename}"
+        if isinstance(image, list):
+            image = image[0]
 
+        image.save(full_path)
+        print(f"✅ Image saved to: {full_path}")
+        
+        return f"{IMAGES_DIR}/{output_filename}"
+        
+    except Exception as e:
+        print(f"❌ Error in image generation: {e}")
+        print(traceback.format_exc())
+        
+        # Fallback vers une image placeholder si la génération échoue
+        print("🟨 Creating placeholder image...")
+        try:
+            placeholder = Image.new('RGB', (512, 512), color='lightgray')
+            placeholder_path = os.path.join(IMAGES_DIR, "placeholder.png")
+            placeholder.save(placeholder_path)
+            return f"{IMAGES_DIR}/placeholder.png"
+        except:
+            return None
 
 # ==============================================================
 # 🚀 Full Pipeline
 # ==============================================================
 def full_pipeline(text: str):
-    summary = smart_summarize(text)
-    keywords = extract_keywords(summary)
-    emojis = sentiment_to_emojis(summary)
-    hashtags = keywords_to_hashtags(keywords)
+    try:
+        print("🟦 Starting pipeline...")
+        
+        # Step 1: Summarize
+        summary = smart_summarize(text)
+        print(f"✅ Summary: {summary}")
+        
+        # Step 2: Extract keywords
+        keywords = extract_keywords(summary)
+        print(f"✅ Keywords: {keywords}")
+        
+        # Step 3: Generate emojis
+        emojis = sentiment_to_emojis(summary)
+        print(f"✅ Emojis: {emojis}")
+        
+        # Step 4: Create hashtags
+        hashtags = keywords_to_hashtags(keywords)
+        print(f"✅ Hashtags: {hashtags}")
+        
+        # Step 5: Generate image
+        pos_prompt, neg_prompt = get_gguf_prompts(summary, emojis, hashtags)
+        image_path = generate_image(pos_prompt, neg_prompt)
+        
+        if image_path:
+            print(f"✅ Image path: {image_path}")
+        else:
+            print("⚠️ Using placeholder image")
 
-    pos_prompt, neg_prompt = get_gguf_prompts(summary, emojis, hashtags)
-    image_path = generate_image(pos_prompt, neg_prompt)
-
-    return {
-        "text": text,
-        "summary": summary,
-        "keywords": keywords,
-        "emojis": emojis,
-        "hashtags": hashtags,
-        "prompt": pos_prompt,
-        "image_path": image_path
-    }
+        result = {
+            "text": text,
+            "summary": summary,
+            "keywords": keywords,
+            "emojis": emojis,
+            "hashtags": hashtags,
+            "prompt": pos_prompt,
+            "image_path": image_path
+        }
+        
+        print("✅ Pipeline completed successfully")
+        return result
+        
+    except Exception as e:
+        print(f"❌ Error in pipeline: {e}")
+        print(traceback.format_exc())
+        
+        # Retourner un résultat de base même en cas d'erreur
+        return {
+            "text": text,
+            "summary": text[:100] + "..." if len(text) > 100 else text,
+            "keywords": ["news", "article"],
+            "emojis": "📰✨",
+            "hashtags": "#News #Article",
+            "prompt": "news article",
+            "image_path": None
+        }
 
 # ==============================================================
-# 🔹 Optional Test
+# 🔹 Test de performance
 # ==============================================================
 if __name__ == "__main__":
-    sample_text = "Internal documents reveal Apple knew the iPhone 6 was more likely to bend than previous models."
+    print("=== Testing Pipeline ===")
+    
+    sample_text = "Breaking news: Major technological breakthrough in artificial intelligence announced today by leading researchers."
+    
+    start_time = time.time()
     result = full_pipeline(sample_text)
-    print(result)
-    Image.open(result["image_path"]).show()
+    total_time = time.time() - start_time
+    
+    print(f"\n=== Performance Results ===")
+    print(f"🟦 Total pipeline time: {total_time:.2f} seconds")
+    print(f"🟦 Image generated: {result['image_path']}")
+    
+    if result['image_path'] and os.path.exists(result['image_path']):
+        image = Image.open(result['image_path'])
+        print(f"🟦 Image size: {image.size}")
+        image.show()

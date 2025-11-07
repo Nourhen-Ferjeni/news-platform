@@ -6,10 +6,11 @@
 # Please update the paths to point to your model and data files.
 
 # Path to the fine-tuned BERT model for Named Entity Recognition (NER)
-NER_MODEL_PATH = "bo4/models/bert_ner_news_finetuned_ner"
+NER_MODEL_PATH = "./models/bert_ner_news_finetuned_ner"
+
 
 # Path to the fine-tuned Llama 3.2 model for analysis generation
-LLM_MODEL_PATH = "bo4/models/llama-3-reasoning-16bit"
+LLM_MODEL_PATH = "./models/llama-3-reasoning-16bit"
 
 # Path to the SLM model for routing
 ROUTER_MODEL_PATH = "models/gemma-3-270m" # Using a pre-trained Gemma model from Hugging Face

@@ -10,7 +10,7 @@ import wikipediaapi
 import chromadb
 from sentence_transformers import SentenceTransformer
 from transformers import BertTokenizerFast, BertForTokenClassification, AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
-from ...config import NER_MODEL_PATH, LLM_MODEL_PATH, WIKIPEDIA_USER_AGENT
+from config import NER_MODEL_PATH, LLM_MODEL_PATH, WIKIPEDIA_USER_AGENT
 import json
 import nltk
 from nltk.tokenize import word_tokenize, sent_tokenize
