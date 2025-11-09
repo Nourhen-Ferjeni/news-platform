@@ -4,7 +4,7 @@ from sqlalchemy.orm import sessionmaker
 
 # Define the database URL. For SQLite, it's a file path.
 # The database file will be created in the `backend` directory.
-SQLALCHEMY_DATABASE_URL = "sqlite:///../database.db"
+SQLALCHEMY_DATABASE_URL = "sqlite:///./database.db"
 
 # Create the SQLAlchemy engine.
 # The `check_same_thread` argument is needed only for SQLite.

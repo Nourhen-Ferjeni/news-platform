@@ -71,12 +71,28 @@ export default function Login() {
       return
     }
 
-    // Simulate authentication
-    setTimeout(() => {
-      localStorage.setItem("user", JSON.stringify({ email }))
-      router.push("/dashboard")
-      setLoading(false)
-    }, 1500)
+    try {
+      const response = await fetch("http://127.0.0.1:8000/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email, password }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to login");
+      }
+
+      const data = await response.json();
+      localStorage.setItem("user", JSON.stringify({ email }));
+      localStorage.setItem("token", data.access_token);
+      router.push("/dashboard");
+    } catch (error) {
+      setError("Invalid email or password");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (

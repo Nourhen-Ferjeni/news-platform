@@ -44,29 +44,35 @@ export function ChatBot({ onClose }: ChatBotProps) {
     setInput("")
     setLoading(true)
 
-    setTimeout(() => {
+    try {
+      const token = localStorage.getItem("token")
+      const response = await fetch("http://127.0.0.1:8000/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ message: input }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to get response from the server.")
+      }
+
+      const data = await response.json()
       const assistantResponse: Message = {
         role: "assistant",
-        content: generateResponse(input),
+        content: data.reply,
       }
       setMessages((prev) => [...prev, assistantResponse])
+    } catch (error) {
+      const assistantResponse: Message = {
+        role: "assistant",
+        content: "Sorry, I'm having trouble connecting to the server.",
+      }
+      setMessages((prev) => [...prev, assistantResponse])
+    } finally {
       setLoading(false)
-    }, 800)
-  }
-
-  const generateResponse = (input: string) => {
-    const lowerInput = input.toLowerCase()
-
-    if (lowerInput.includes("article") || lowerInput.includes("news")) {
-      return "Je peux vous aider à explorer nos articles. Souhaitez-vous connaître les articles récents, ou préférez-vous filtrer par catégorie (Technologie, Sports, Affaires, etc.)?"
-    } else if (lowerInput.includes("vidéo") || lowerInput.includes("video")) {
-      return "Nous avons plusieurs vidéos intéressantes disponibles. Voulez-vous voir les analyses d'experts, les documentaires, ou les débats?"
-    } else if (lowerInput.includes("fake") || lowerInput.includes("faux")) {
-      return 'Excellent question! Notre système de vérification analyse chaque source et identifie les indicateurs de fausses informations. Vous pouvez cliquer sur le bouton "Vérifier" sur chaque article pour voir l\'analyse détaillée.'
-    } else if (lowerInput.includes("résumé") || lowerInput.includes("resume")) {
-      return "Je peux générer des résumés automatiques de n'importe quel article. Lequel vous intéresse particulièrement?"
-    } else {
-      return "C'est une excellente question! Je peux vous aider à explorer les actualités, analyser des contenus, ou répondre à vos questions sur les articles et vidéos. Que souhaitez-vous savoir?"
     }
   }
 

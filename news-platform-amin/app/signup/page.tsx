@@ -87,18 +87,44 @@ export default function Signup() {
       return
     }
 
-    // Simulate registration
-    setTimeout(() => {
-      localStorage.setItem(
-        "user",
-        JSON.stringify({
-          name: formData.name,
-          email: formData.email,
-        }),
-      )
-      router.push("/dashboard")
-      setLoading(false)
-    }, 1500)
+    try {
+      const response = await fetch("http://127.0.0.1:8000/register", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email: formData.email, password: formData.password }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to register");
+      }
+
+      const data = await response.json();
+      localStorage.setItem("user", JSON.stringify({ email: data.email }));
+      
+      // Log in the user automatically after registration
+      const loginResponse = await fetch("http://127.0.0.1:8000/login", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email: formData.email, password: formData.password }),
+      });
+
+      if (!loginResponse.ok) {
+        throw new Error("Failed to login after registration");
+      }
+
+      const loginData = await loginResponse.json();
+      localStorage.setItem("token", loginData.access_token);
+      
+      router.push("/dashboard");
+    } catch (error) {
+      setError("Failed to register. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   // Password strength indicator

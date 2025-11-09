@@ -1,22 +1,18 @@
-from ctransformers import AutoModelForCausalLM
-from config import TINYLLAMA_MODEL_PATH
+from app.llm_loader import llm_loader
+from transformers import pipeline
 
 class ChatTool:
     def __init__(self):
         """
-        Initializes the Casual Chat Tool with the TinyLlama model.
+        Initializes the Casual Chat Tool with the shared Llama3 model.
         """
-        try:
-            self.llm = AutoModelForCausalLM.from_pretrained(
-                ".",
-                model_file=TINYLLAMA_MODEL_PATH,
-                model_type="llama",
-                gpu_layers=5,
-            )
-            print("Chat model (TinyLlama) loaded successfully.")
-        except Exception as e:
-            print(f"Error loading chat model: {e}")
-            self.llm = None
+        llm_loader.load_model()
+        self.model = llm_loader.model
+        self.tokenizer = llm_loader.tokenizer
+        if self.model and self.tokenizer:
+            self.generator = pipeline("text-generation", model=self.model, tokenizer=self.tokenizer)
+        else:
+            self.generator = None
 
     def run(self, user_input: str, history: list) -> str:
         """
@@ -29,19 +25,19 @@ class ChatTool:
         Returns:
             str: The model's response.
         """
-        if not self.llm:
+        if not self.generator:
             return "The chat model is not available."
 
         # Format the conversation history for the model
-        prompt = ""
+        messages = []
         for msg in history:
             if msg.type == "human":
-                prompt += f"user: {msg.content}\n"
+                messages.append({"role": "user", "content": msg.content})
             elif msg.type == "ai":
-                prompt += f"assistant: {msg.content}\n"
+                messages.append({"role": "assistant", "content": msg.content})
         
-        prompt += f"user: {user_input}\nassistant:"
+        prompt = self.tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         
-        response = self.llm(prompt, max_new_tokens=10, temperature=0.7)
+        outputs = self.generator(prompt, max_new_tokens=50, do_sample=True, temperature=0.7, top_p=0.95)
         
-        return response
+        return outputs[0]['generated_text'][len(prompt):]

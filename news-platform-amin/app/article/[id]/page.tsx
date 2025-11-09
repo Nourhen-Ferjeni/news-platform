@@ -76,7 +76,7 @@ export default function ArticleDetailPage() {
     try {
       setExtracting(true)
       setSummary(null)
-      const ex = await fetch("/api/extract", {
+      const ex = await fetch("http://127.0.0.1:8000/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: articleFromQuery.url }),
@@ -98,7 +98,7 @@ export default function ArticleDetailPage() {
       setSummaryError(null)
       const abort = new AbortController()
       const timer = setTimeout(() => abort.abort(), 35000)
-      const sm = await fetch("/api/summarize", {
+      const sm = await fetch("http://127.0.0.1:8000/summarize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: textToSummarize, max_length: 150, min_length: 50 }),
@@ -131,10 +131,10 @@ export default function ArticleDetailPage() {
       setAnalyzing(true)
       setAnalysis(null)
       setAnalysisError(null)
-      const res = await fetch("http://127.0.0.1:8001/analyze", {
+      const res = await fetch("http://127.0.0.1:8000/deep-analysis", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ article_text: extractedText }),
+        body: JSON.stringify({ text: extractedText }),
       })
       const data = await res.json()
       if (!res.ok) throw new Error(data?.error || "Failed to analyze")
@@ -154,11 +154,11 @@ export default function ArticleDetailPage() {
     setImageError(null);
 
     try {
-      const res = await fetch("http://127.0.0.1:8080/generate_post", {
+      const res = await fetch("http://127.0.0.1:8000/generate-post", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          article_text: extractedText || summary || "No text"
+          text: extractedText || summary || "No text"
         }),
       });
 
@@ -226,7 +226,7 @@ export default function ArticleDetailPage() {
     if (!generatedPost) return;
 
     try {
-      const shareRes = await fetch("http://127.0.0.1:8080/share_post", {
+      const shareRes = await fetch("http://127.0.0.1:8000/share-post", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

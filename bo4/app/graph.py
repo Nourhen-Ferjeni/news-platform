@@ -5,8 +5,12 @@ from .tools.analysis_tool import AnalysisTool
 from .tools.chat_tool import ChatTool
 from .tools.news_fetcher_tool import NewsFetcherTool
 from .tools.router_tool import RouterTool
+from .llm_loader import llm_loader
 
 # --- 1. Initialize Tools ---
+# Load the model once
+llm_loader.load_model()
+
 analysis_tool = AnalysisTool()
 chat_tool = ChatTool()
 news_fetcher_tool = NewsFetcherTool()
@@ -15,8 +19,8 @@ router_tool = RouterTool()
 # --- 2. Define Graph Nodes ---
 def route_message(state: AgentState):
     """The primary router node."""
-    last_message = state['messages'][-1].content
-    router_output = router_tool.run(last_message)
+    messages = state['messages']
+    router_output = router_tool.run(messages)
     
     intent = router_output.get("intent", "chat")
     topic = router_output.get("topic")
@@ -53,7 +57,9 @@ def call_analysis_tool(state: AgentState):
         response = "There is no article to analyze. Please fetch one first by asking for 'news about [topic]'."
         return {"messages": [AIMessage(content=response)]}
     
-    analysis_result = analysis_tool.run(article)
+    print(f"--- Article passed to analysis tool ---\n{article}\n---------------------------------------")
+    history = state['messages']
+    analysis_result = analysis_tool.run(article, history)
     return {"messages": [AIMessage(content=analysis_result)]}
 
 # --- 3. Define Conditional Edges ---

@@ -12,6 +12,7 @@ from sentence_transformers import SentenceTransformer
 from transformers import BertTokenizerFast, BertForTokenClassification, AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from config import NER_MODEL_PATH, LLM_MODEL_PATH, WIKIPEDIA_USER_AGENT
 import json
+from app.llm_loader import llm_loader
 import nltk
 from nltk.tokenize import word_tokenize, sent_tokenize
 from transformers import pipeline
@@ -71,19 +72,11 @@ class AnalysisTool:
         self.generator = None
         if self.has_gpu:
             try:
-                print("Loading model in 4-bit for GPU.")
-                quantization_config = BitsAndBytesConfig(load_in_4bit=True)
-                self.llm_tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL_PATH)
-                self.llm_model = AutoModelForCausalLM.from_pretrained(
-                    LLM_MODEL_PATH,
-                    quantization_config=quantization_config,
-                    torch_dtype=torch.float16,
-                    device_map="auto",
-                    
-                )
+                llm_loader.load_model()
+                self.llm_model = llm_loader.model
+                self.llm_tokenizer = llm_loader.tokenizer
                 self.generator = pipeline("text-generation", model=self.llm_model, tokenizer=self.llm_tokenizer)
-               # self.llm_model = torch.compile(self.llm_model, mode="reduce-overhead", fullgraph=True)
-                print("Analysis LLM loaded successfully in 4-bit.")
+                print("Analysis LLM loaded successfully.")
             except Exception as e:
                 print(f"Error loading Analysis LLM on GPU: {e}")
                 self.generator = None
@@ -196,7 +189,7 @@ class AnalysisTool:
                     enriched_data[entity] = { "summary": f"No information found for '{entity}'.", "url": "" }
         return enriched_data
 
-    def _generate_analysis(self, article_text, enriched_data):
+    def _generate_analysis(self, article_text, enriched_data, history):
         analysis_start = "<start_analysis>"
         analysis_end = "</end_analysis>"
         system_prompt = f"""You are an analyst given an article and associated entities.
@@ -216,6 +209,15 @@ Output in plain text with sections like 'Concise Summary:', 'Impact Forecast:', 
             """ent_str += f"- Name: {name}, Profile: {data['summary']}\n"""
             ent_str += f"- Name: \n"
         user_prompt = f"""{ent_str}\nArticle Text: {article_text}\n\nAnalyze this article."""
+
+        messages = []
+        for msg in history:
+            if msg.type == "human":
+                messages.append({"role": "user", "content": msg.content})
+            elif msg.type == "ai":
+                messages.append({"role": "assistant", "content": msg.content})
+        
+        messages.append({"role": "user", "content": user_prompt})
 
         prompt = [
             {"role": "system", "content": system_prompt},
@@ -251,7 +253,7 @@ Output in plain text with sections like 'Concise Summary:', 'Impact Forecast:', 
         else:
             return f"Raw Generated Output (no tags found):\n{generated_text}"
 
-    def run(self, article_text: str) -> str:
+    def run(self, article_text: str, history: list) -> str:
         """
         Executes the full analysis pipeline.
         """
@@ -262,7 +264,7 @@ Output in plain text with sections like 'Concise Summary:', 'Impact Forecast:', 
         enriched_data = self._enrich_entities(entities)
         print("Enriched Entity Data.")
         
-        analysis = self._generate_analysis(article_text, enriched_data)
+        analysis = self._generate_analysis(article_text, enriched_data, history)
         print("Generated Analysis.")
         
         return analysis

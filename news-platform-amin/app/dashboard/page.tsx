@@ -353,14 +353,15 @@ export default function Dashboard() {
       try {
         setLoadingNews(true)
         setNewsError(null)
-        const searchParam = searchQuery ? `&q=${encodeURIComponent(searchQuery)}` : "&q=technology%20OR%20world%20OR%20business"
-        
-        const res = await fetch(`/api/news?pageSize=10${searchParam}`, { 
-          cache: "no-store" 
+        const token = localStorage.getItem("token")
+        const res = await fetch("http://127.0.0.1:8000/personalized-news", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         })
         const data = await res.json()
         if (!res.ok) throw new Error(data?.error || "Failed to load news")
-        const mapped: NewsArticle[] = (data.articles || []).map((a: any, idx: number) => ({
+        const mapped: NewsArticle[] = (data.news || []).map((a: any, idx: number) => ({
           id: String(idx + 1),
           title: a.title || "Untitled",
           description: a.description || a.content || "",
@@ -379,7 +380,7 @@ export default function Dashboard() {
       }
     }
     fetchNews()
-  }, [searchQuery])
+  }, [])
 
   // Load videos on component mount - Only static videos by default
   useEffect(() => {

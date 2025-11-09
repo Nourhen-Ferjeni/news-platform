@@ -8,3 +8,22 @@ python-dotenv
 requests
 langchain
 langgraph
+langchain-community
+langchain-google-genai
+langchain-huggingface
+faiss-cpu
+sentence-transformers
+serpapi
+newsapi-python
+transformers
+keybert
+# stable-diffusion-cpp
+pillow
+pandas
+torch
+tensorflow
+wikipedia-api
+chromadb
+nltk
+bitsandbytes
+accelerate
