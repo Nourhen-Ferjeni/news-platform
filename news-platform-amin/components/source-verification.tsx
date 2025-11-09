@@ -49,7 +49,7 @@ export default function SourceVerification({
   const [verificationData, setVerificationData] = useState<VerificationData | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'
+  const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000'
 
   const handleVerify = async () => {
     setIsChecking(true)
@@ -59,14 +59,13 @@ export default function SourceVerification({
       // Utiliser directement le summary comme revendication
       const claim = contentSummary || contentTitle;
       
-      const response = await fetch(`${API_BASE}/verify`, {
+      const response = await fetch(`${API_BASE}/check-fake-news`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ 
           claim: claim,
-          contentType: contentType
         }),
       })
 
@@ -132,7 +131,44 @@ export default function SourceVerification({
     similar_claim: ""
   }
 
-  const data = verificationData || defaultVerificationData
+  const data = verificationData
+
+  if (!showDetailedResults) {
+    return (
+      <Card className="p-8 border-border/50 bg-gradient-to-br from-card to-card/50">
+        <div className="space-y-4">
+          {error && (
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+              {error}
+            </div>
+          )}
+
+          <Button
+            onClick={handleVerify}
+            disabled={isChecking}
+            className={`w-full sm:w-auto py-6 px-8 rounded-lg font-semibold transition-all ${
+              isChecking ? "bg-primary/50" : "bg-primary hover:bg-primary/90 shadow-lg hover:shadow-xl"
+            }`}>
+            {isChecking ? (
+              <>
+                <Loader2 size={18} className="mr-2 animate-spin" />
+                Verifying...
+              </>
+            ) : (
+              <>
+                <Shield size={18} className="mr-2" />
+                Verify Source
+              </>
+            )}
+          </Button>
+        </div>
+      </Card>
+    )
+  }
+
+  if (!data) {
+    return null
+  }
 
   const getVerdictColor = () => {
     switch (data.verdict) {
@@ -194,36 +230,7 @@ export default function SourceVerification({
         </p>
       </div>
 
-      {!showDetailedResults ? (
-        <Card className="p-8 border-border/50 bg-gradient-to-br from-card to-card/50">
-          <div className="space-y-4">
-            {error && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
-                {error}
-              </div>
-            )}
-
-            <Button
-              onClick={handleVerify}
-              disabled={isChecking}
-              className={`w-full sm:w-auto py-6 px-8 rounded-lg font-semibold transition-all ${
-                isChecking ? "bg-primary/50" : "bg-primary hover:bg-primary/90 shadow-lg hover:shadow-xl"
-              }`}>
-              {isChecking ? (
-                <>
-                  <Loader2 size={18} className="mr-2 animate-spin" />
-                  Verifying...
-                </>
-              ) : (
-                <>
-                  <Shield size={18} className="mr-2" />
-                  Verify Source
-                </>
-              )}
-            </Button>
-          </div>
-        </Card>
-      ) : (
+      {showDetailedResults && verificationData && (
         <div className="space-y-6 animate-fade-in">
           {/* Cache Notice */}
           {data.from_cache && (
@@ -266,12 +273,12 @@ export default function SourceVerification({
           <div className="grid grid-cols-3 gap-3">
             <Card className="p-4 text-center bg-card/50 border-border/30">
               <TrendingUp size={20} className="mx-auto text-primary mb-2" />
-              <p className="text-2xl font-bold text-foreground">{data.consulted_sources.length}</p>
+              <p className="text-2xl font-bold text-foreground">{data.consulted_sources?.length || 0}</p>
               <p className="text-xs text-foreground/60 mt-1">Sources</p>
             </Card>
             <Card className="p-4 text-center bg-card/50 border-border/30">
               <FileText size={20} className="mx-auto text-primary mb-2" />
-              <p className="text-2xl font-bold text-foreground">{data.keyEvidence.length}</p>
+              <p className="text-2xl font-bold text-foreground">{data.keyEvidence?.length || 0}</p>
               <p className="text-xs text-foreground/60 mt-1">Evidence</p>
             </Card>
             <Card className="p-4 text-center bg-card/50 border-border/30">
@@ -297,7 +304,7 @@ export default function SourceVerification({
               <h5 className="font-bold text-lg text-foreground">Key Evidence</h5>
             </div>
             <div className="space-y-3">
-              {data.keyEvidence.map((evidence, idx) => (
+              {data.keyEvidence?.map((evidence, idx) => (
                 <div key={idx} className="flex gap-3 p-4 rounded-lg bg-background/50 border border-border/20 hover:border-primary/30 transition-colors">
                   <div className="flex-shrink-0 w-5 h-5 bg-primary/20 rounded-full flex items-center justify-center mt-0.5">
                     <CheckCircle2 size={12} className="text-primary" />
@@ -332,7 +339,7 @@ export default function SourceVerification({
               <h5 className="font-bold text-lg text-foreground">Consulted Sources</h5>
             </div>
             <div className="grid gap-3">
-              {data.consulted_sources.map((source, idx) => (
+              {data.consulted_sources?.map((source, idx) => (
                 <a
                   key={idx}
                   href={source.url}

@@ -158,10 +158,20 @@ async def personalized_news(current_user: models.User = Depends(get_current_user
     if not interests:
         interests = ["technology", "world", "business"]
     
-    query = " OR ".join(interests)
-    
-    news = graph.news_fetcher_tool.run(query)
-    return {"news": news.get("articles", [])}
+    all_articles = []
+    for interest in interests:
+        news = graph.news_fetcher_tool.run(f"{interest}&pageSize=5")
+        all_articles.extend(news.get("articles", []))
+        
+    # Remove duplicates
+    seen_titles = set()
+    unique_articles = []
+    for article in all_articles:
+        if article["title"] not in seen_titles:
+            unique_articles.append(article)
+            seen_titles.add(article["title"])
+            
+    return {"news": unique_articles}
 
 @app.post("/chat")
 async def chat(request: dict, current_user: models.User = Depends(get_current_user)):

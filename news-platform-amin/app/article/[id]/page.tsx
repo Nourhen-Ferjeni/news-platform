@@ -32,7 +32,6 @@ export default function ArticleDetailPage() {
   const { id } = useParams<{ id: string }>()
   const [savedArticle, setSavedArticle] = useState(false)
   const [likes, setLikes] = useState(1247)
-  const [extracting, setExtracting] = useState(false)
   const [summarizing, setSummarizing] = useState(false)
   const [extractedText, setExtractedText] = useState<string | null>(null)
   const [summary, setSummary] = useState<string | null>(null)
@@ -70,60 +69,60 @@ export default function ArticleDetailPage() {
     summary: summary || "",
   }
 
-  const handleExtractAndSummarize = useCallback(async () => {
-    if (!articleFromQuery.url) return
-    let extracted: string | null = null
+  const handleSummarize = useCallback(async () => {
+    if (!articleFromQuery.url) return;
+    setSummarizing(true);
+    setSummary(null);
+    setExtractedText(null);
+    setSummaryError(null);
+
     try {
-      setExtracting(true)
-      setSummary(null)
+      // Step 1: Extract text
       const ex = await fetch("http://127.0.0.1:8000/extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: articleFromQuery.url }),
-      })
-      const exJson = await ex.json()
-      if (!ex.ok) throw new Error(exJson?.error || "Failed to extract")
-      extracted = (exJson.text as string) || ""
-      setExtractedText(extracted)
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setExtracting(false)
-    }
+      });
+      const exJson = await ex.json();
+      if (!ex.ok) throw new Error(exJson?.error || "Failed to extract");
+      const extracted = (exJson.text as string) || "";
+      setExtractedText(extracted);
 
-    try {
-      const textToSummarize = (extracted || "").trim()
-      if (!textToSummarize) return
-      setSummarizing(true)
-      setSummaryError(null)
-      const abort = new AbortController()
-      const timer = setTimeout(() => abort.abort(), 35000)
+      // Step 2: Summarize text
+      const textToSummarize = extracted.trim();
+      if (!textToSummarize) {
+        setSummaryError("Could not extract text to summarize.");
+        return;
+      }
+      
+      const abort = new AbortController();
+      const timer = setTimeout(() => abort.abort(), 35000);
       const sm = await fetch("http://127.0.0.1:8000/summarize", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ text: textToSummarize, max_length: 150, min_length: 50 }),
         signal: abort.signal,
-      })
-      clearTimeout(timer)
-      const smText = await sm.text()
-      let smJson: any = {}
+      });
+      clearTimeout(timer);
+      const smText = await sm.text();
+      let smJson: any = {};
       try {
-        smJson = smText ? JSON.parse(smText) : {}
+        smJson = smText ? JSON.parse(smText) : {};
       } catch {
-        smJson = {}
+        smJson = {};
       }
       if (!sm.ok && !smJson?.summary) {
-        setSummaryError(smJson?.error || "Failed to summarize")
-        return
+        throw new Error(smJson?.error || "Failed to summarize");
       }
-      setSummary(smJson.summary)
+      setSummary(smJson.summary);
+
     } catch (e) {
-      console.error(e)
-      setSummaryError((e as Error)?.message || "Failed to summarize")
+      console.error(e);
+      setSummaryError((e as Error)?.message || "Failed to summarize");
     } finally {
-      setSummarizing(false)
+      setSummarizing(false);
     }
-  }, [articleFromQuery.url])
+  }, [articleFromQuery.url]);
 
   const handleAnalyze = useCallback(async () => {
     if (!extractedText) return
@@ -372,18 +371,18 @@ export default function ArticleDetailPage() {
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Button
-                  onClick={handleExtractAndSummarize}
-                  disabled={extracting || summarizing}
+                  onClick={handleSummarize}
+                  disabled={summarizing}
                   variant="outline"
                   className="h-16 justify-start p-4 rounded-xl border-2 border-blue-200/50 hover:border-blue-300 hover:bg-white/50 dark:border-blue-800/50 dark:hover:border-blue-700"
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900 flex items-center justify-center ${(extracting || summarizing) ? 'animate-pulse' : ''}`}>
+                    <div className={`w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900 flex items-center justify-center ${summarizing ? 'animate-pulse' : ''}`}>
                       <BrainCircuit size={20} className="text-blue-600" />
                     </div>
                     <div className="text-left">
                       <p className="font-semibold text-sm">
-                        {extracting ? 'Extracting...' : summarizing ? 'Summarizing...' : 'Extract & Summarize'}
+                        {summarizing ? 'Summarizing...' : 'Summarize'}
                       </p>
                       <p className="text-xs text-slate-500">AI-powered analysis</p>
                     </div>
